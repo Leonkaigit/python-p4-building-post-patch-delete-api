@@ -1,6 +1,4 @@
-#!/usr/bin/env python3
-
-from flask import Flask, request, make_response
+from flask import Flask, request, make_response, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 
@@ -15,139 +13,74 @@ migrate = Migrate(app, db)
 
 db.init_app(app)
 
-@app.route('/')
-def index():
-    return "Index for Game/Review/User API"
 
-@app.route('/games')
-def games():
+@app.route('/baked_goods', methods=['POST'])
+def create_baked_good():
+    data = request.form
+    new_baked_good = BakedGood(
+        name=data.get('name'),
+        description=data.get('description'),
+        
+    )
 
-    games = []
-    for game in Game.query.all():
-        game_dict = game.to_dict()
-        games.append(game_dict)
+    db.session.add(new_baked_good)
+    db.session.commit()
+
+    baked_good_dict = new_baked_good.to_dict()
 
     response = make_response(
-        games,
-        200
+        jsonify(baked_good_dict),
+        201
     )
 
     return response
 
-@app.route('/games/<int:id>')
-def game_by_id(id):
-    game = Game.query.filter(Game.id == id).first()
+@app.route('/bakeries/<int:id>', methods=['PATCH'])
+def update_bakery_name(id):
+    bakery = Bakery.query.filter(Bakery.id == id).first()
 
-    game_dict = game.to_dict()
+    if bakery is None:
+        response_body = {"message": "Bakery not found"}
+        return make_response(jsonify(response_body), 404)
 
-    response = make_response(
-        game_dict,
-        200
-    )
+    data = request.form
+    new_name = data.get('name')
 
-    return response
+    if new_name:
+        bakery.name = new_name
+        db.session.commit()
 
-@app.route('/reviews', methods=['GET', 'POST'])
-def reviews():
-
-    if request.method == 'GET':
-        reviews = []
-        for review in Review.query.all():
-            review_dict = review.to_dict()
-            reviews.append(review_dict)
+        bakery_dict = bakery.to_dict()
 
         response = make_response(
-            reviews,
+            jsonify(bakery_dict),
             200
         )
 
         return response
-
-    elif request.method == 'POST':
-        new_review = Review(
-            score=request.form.get("score"),
-            comment=request.form.get("comment"),
-            game_id=request.form.get("game_id"),
-            user_id=request.form.get("user_id"),
-        )
-
-        db.session.add(new_review)
-        db.session.commit()
-
-        review_dict = new_review.to_dict()
-
-        response = make_response(
-            review_dict,
-            201
-        )
-
-        return response
-
-@app.route('/reviews/<int:id>', methods=['GET', 'PATCH', 'DELETE'])
-def review_by_id(id):
-    review = Review.query.filter(Review.id == id).first()
-
-    if review == None:
-        response_body = {
-            "message": "This record does not exist in our database. Please try again."
-        }
-        response = make_response(response_body, 404)
-
-        return response
-
     else:
-        if request.method == 'GET':
-            review_dict = review.to_dict()
+        response_body = {"message": "Name is required in the form"}
+        return make_response(jsonify(response_body), 400)
 
-            response = make_response(
-                review_dict,
-                200
-            )
 
-            return response
+@app.route('/baked_goods/<int:id>', methods=['DELETE'])
+def delete_baked_good(id):
+    baked_good = BakedGood.query.filter(BakedGood.id == id).first()
 
-        elif request.method == 'PATCH':
-            for attr in request.form:
-                setattr(review, attr, request.form.get(attr))
+    if baked_good is None:
+        response_body = {"message": "Baked Good not found"}
+        return make_response(jsonify(response_body), 404)
 
-            db.session.add(review)
-            db.session.commit()
+    db.session.delete(baked_good)
+    db.session.commit()
 
-            review_dict = review.to_dict()
-
-            response = make_response(
-                review_dict,
-                200
-            )
-
-            return response
-
-        elif request.method == 'DELETE':
-            db.session.delete(review)
-            db.session.commit()
-
-            response_body = {
-                "delete_successful": True,
-                "message": "Review deleted."
-            }
-
-            response = make_response(
-                response_body,
-                200
-            )
-
-            return response
-
-@app.route('/users')
-def users():
-
-    users = []
-    for user in User.query.all():
-        user_dict = user.to_dict()
-        users.append(user_dict)
+    response_body = {
+        "delete_successful": True,
+        "message": "Baked Good deleted."
+    }
 
     response = make_response(
-        users,
+        jsonify(response_body),
         200
     )
 
