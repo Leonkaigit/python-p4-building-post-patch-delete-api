@@ -1,90 +1,64 @@
 from flask import Flask, request, make_response, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-
-from models import db, User, Review, Game
+from sqlalchemy_serializer import SerializerMixin
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.json.compact = False
 
+db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
-db.init_app(app)
+class Game(db.Model, SerializerMixin):
+    __tablename__ = 'games'
+    serialize_rules = ('-reviews.game',)
 
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String, unique=True)
+    genre = db.Column(db.String)
+    platform = db.Column(db.String)
+    price = db.Column(db.Integer)
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime, onupdate=db.func.now())
 
-@app.route('/baked_goods', methods=['POST'])
-def create_baked_good():
-    data = request.form
-    new_baked_good = BakedGood(
-        name=data.get('name'),
-        description=data.get('description'),
-        
-    )
+    reviews = db.relationship('Review', backref='game')
 
-    db.session.add(new_baked_good)
-    db.session.commit()
+    def __repr__(self):
+        return f'<Game {self.title} for {self.platform}>'
 
-    baked_good_dict = new_baked_good.to_dict()
+class Review(db.Model, SerializerMixin):
+    __tablename__ = 'reviews'
+    serialize_rules = ('-game.reviews', '-user.reviews',)
 
-    response = make_response(
-        jsonify(baked_good_dict),
-        201
-    )
+    id = db.Column(db.Integer, primary_key=True)
+    score = db.Column(db.Integer)
+    comment = db.Column(db.String)
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime, onupdate=db.func.now())
 
-    return response
+    game_id = db.Column(db.Integer, db.ForeignKey('games.id'))
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
 
-@app.route('/bakeries/<int:id>', methods=['PATCH'])
-def update_bakery_name(id):
-    bakery = Bakery.query.filter(Bakery.id == id).first()
+    def __repr__(self):
+        return f'<Review ({self.id}) of {self.game}: {self.score}/10>'
 
-    if bakery is None:
-        response_body = {"message": "Bakery not found"}
-        return make_response(jsonify(response_body), 404)
+class User(db.Model, SerializerMixin):
+    __tablename__ = 'users'
+    serialize_rules = ('-reviews.user',)
 
-    data = request.form
-    new_name = data.get('name')
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String)
+    
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
+    updated_at = db.Column(db.DateTime, onupdate=db.func.now())
 
-    if new_name:
-        bakery.name = new_name
-        db.session.commit()
+    reviews = db.relationship('Review', backref='user')
 
-        bakery_dict = bakery.to_dict()
+    def __repr__(self):
+        return f'<User {self.name}>'
 
-        response = make_response(
-            jsonify(bakery_dict),
-            200
-        )
-
-        return response
-    else:
-        response_body = {"message": "Name is required in the form"}
-        return make_response(jsonify(response_body), 400)
-
-
-@app.route('/baked_goods/<int:id>', methods=['DELETE'])
-def delete_baked_good(id):
-    baked_good = BakedGood.query.filter(BakedGood.id == id).first()
-
-    if baked_good is None:
-        response_body = {"message": "Baked Good not found"}
-        return make_response(jsonify(response_body), 404)
-
-    db.session.delete(baked_good)
-    db.session.commit()
-
-    response_body = {
-        "delete_successful": True,
-        "message": "Baked Good deleted."
-    }
-
-    response = make_response(
-        jsonify(response_body),
-        200
-    )
-
-    return response
+# Existing routes...
 
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
